@@ -1,5 +1,9 @@
 // TODO Document
 
+import Foundation
+import PlaygroundSupport
+
+PlaygroundPage.current.needsIndefiniteExecution = true
 
 ///////////////////
 // Custom Datatypes
@@ -61,17 +65,16 @@ struct M_Rating {
     /// eg: 'Rotten Tomatoes'
     let source:    String
     
-    /// The movies rating out of 10.    
-    /// eg: 7
-    let value:     Int
+
+    let value:     String
 }
 
 /// The different Film Genres
 enum M_Genre: String {
-    case action   = "action"
-    case crime    = "crime"
-    case thriller = "thriller"
-    case drama    = "drama"
+    case action   = "Action"
+    case crime    = "Crime"
+    case thriller = "Thriller"
+    case drama    = "Drama"
 }
 
 
@@ -147,17 +150,24 @@ extension M_Movie{
     
     /// Parser a `Location` from the `json` dictinoary.
     init(json: [String: Any]) throws {
+        guard let combinedGenres = json["Genre"] as? String else {
+            throw MovieJSONParseError.missingGenre
+        }
+        
         let title       = try M_Movie.parseTitle(json: json)
         let year        = try M_Movie.parseYear(json: json)
         let rated       = try M_Movie.parseRated(json: json)
-        let genre       = try M_Genre(json: json)
+        let genre       = combinedGenres.components(separatedBy: ", ").flatMap(M_Genre.init)
+        //try M_Genre(json: json)
         let details     = try M_ExtraDetails(json: json)
+        
+
         
         
         self.init(title:   title,
                   year:    year,
                   rated:   rated,
-                  genre:   [genre],
+                  genre:   genre,
                   details: details)
     }
 }
@@ -167,7 +177,7 @@ extension M_ExtraDetails{
         guard let runtime = json["Runtime"] as? String else {
             throw ExtraDetailJSONParseError.missingRuntime
         }
-        return Int(runtime)!
+        return Int(runtime.components(separatedBy: " ")[0])!
     }
     
     private static func parseWriter(json: [String: Any]) throws -> String {
@@ -208,18 +218,24 @@ extension M_ExtraDetails{
     }
 }
 
+
+// TODO These are not correct
 extension M_Rating{
     private static func parseSource(json: [String: Any]) throws -> String {
-        guard let title = json["Source"] as? String else {
+        guard let ratings = json["Ratings"] as? [[String: Any]],
+              let first = ratings.first,
+              let source = first["Source"] as? String else {
             throw RatingJSONParseError.missingSource
         }
-        return title
+        return source
     }
-    private static func parseValue(json: [String: Any]) throws -> Int {
-        guard let year = json["Value"] as? String else {
+    private static func parseValue(json: [String: Any]) throws -> String {
+        guard let ratings = json["Ratings"] as? [[String: Any]],
+            let first = ratings.first,
+            let value = first["Value"] as? String else {
             throw RatingJSONParseError.missingValue
         }
-        return Int(year)!
+        return value
     }
     
     
@@ -233,25 +249,24 @@ extension M_Rating{
                   value:  value)
     }
 }
-
-extension M_Genre{
-    private static func parseGenre(json: [String: Any]) throws -> M_Genre {
-        guard let genString = json["Genre"] as? String else {
-            throw GenreJSONParseError.missingGenre
-        }
-        guard let genre = M_Genre(rawValue: genString) else {
-            throw GenreJSONParseError.unknownGenre
-        }
-        
-        return genre
-    }
-    
-    /// Parser a `Location` from the `json` dictinoary.
-    init(json: [String: Any]) throws {
-        let genre      = try M_Genre.parseGenre(json: json)
-        self = genre
-    }
-}
+//
+//extension M_Genre{
+//    private static func parseGenre(raw: String) throws -> M_Genre {
+//        guard let genre = M_Genre(rawValue: raw) else {
+//            throw GenreJSONParseError.unknownGenre
+//        }
+//        
+//        return genre
+//    }
+//    
+//    /// Parser a `Location` from the `json` dictinoary.
+//    init(json: [String: Any]) throws {
+//        print(json)
+//        let genre      = try M_Genre.parseGenre(json: json)
+//        self = genre
+//        
+//    }
+//}
 
 
 
@@ -263,7 +278,75 @@ extension M_Genre{
 ////////////////////////////
 func displayMovie(movie: M_Movie){
     print(movie.title)
+    print(movie.year)
 }
+
+
+
+
+
+
+
+struct APIFetcher {
+    /// Fetches the JSON from `url`. When done the JSON is made available in
+    /// `completion`.
+    private static func fetch(from url: String, with completion: @escaping ([String: Any]) -> ()) {
+        let stringUrl = url.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed)
+        let myUrl = URL(string: stringUrl!)
+        
+        // Creaste URL Request
+        var request = URLRequest(url: myUrl!)
+        
+        // Set request HTTP method to GET. It could be POST as well
+        request.httpMethod = "GET"
+        
+
+        
+        // Excute HTTP Request
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            // Check for error
+            if error != nil {
+                print("error=\(error)")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                do {
+                    if let dict = try JSONSerialization.jsonObject(with: data!, options: []) as? [String: Any] {
+                        completion(dict)
+                    }
+                } catch let error as NSError {
+                    print("JSON Error : \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        task.resume()
+        
+    }
+    
+    /// Fetches the restaurants near the `postcode` in `category`.
+    static func fetchMovie(title: String, with completion: @escaping (M_Movie) -> ()){
+        // TODO Account for spaces in the title, and fill with `+`
+        let url = "http://www.omdbapi.com/?t=\(title)"
+        print(url)
+        fetch(from: url) { json in
+            let movie = json
+            
+
+            let parsedMovie = try! M_Movie(json: movie)
+            completion(parsedMovie)
+        }
+    }
+}
+
+
+
+APIFetcher.fetchMovie(title: "shooter", with: displayMovie)
+
+
+
+
 
 
 
