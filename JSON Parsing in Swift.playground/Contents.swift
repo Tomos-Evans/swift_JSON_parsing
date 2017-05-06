@@ -30,6 +30,10 @@ struct M_Movie {
     /// Extra Details about the movie.
     let details:   M_ExtraDetails
     
+    /// The movies plot
+    let plot:      String
+    
+    /// The title and the year
     var shortInfo: String {
         return title +  ", " + String(year)
     }
@@ -71,10 +75,18 @@ struct M_Rating {
 
 /// The different Film Genres
 enum M_Genre: String {
-    case action   = "Action"
-    case crime    = "Crime"
-    case thriller = "Thriller"
-    case drama    = "Drama"
+    case action      = "Action"
+    case crime       = "Crime"
+    case thriller    = "Thriller"
+    case drama       = "Drama"
+    case short       = "Short"
+    case scifi       = "Sci-fi"
+    case comedy      = "Comedy"
+    case horror      = "Horror"
+    case documentary = "Documentary"
+    case history     = "History"
+    case war         = "War"
+    case mystery     = "Mystery"
 }
 
 
@@ -93,6 +105,7 @@ enum MovieJSONParseError: Error {
     case missingGenre
     case missingReviews
     case noInfoString
+    case missingPlot
 }
 
 
@@ -144,6 +157,13 @@ extension M_Movie{
         }
         return rated
     }
+    private static func parsePlot(json: [String: Any]) throws -> String {
+        guard let plot = json["Plot"] as? String else {
+            throw MovieJSONParseError.missingPlot
+        }
+        return plot
+    }
+    
 
     
     
@@ -158,7 +178,7 @@ extension M_Movie{
         let year        = try M_Movie.parseYear(json: json)
         let rated       = try M_Movie.parseRated(json: json)
         let genre       = combinedGenres.components(separatedBy: ", ").flatMap(M_Genre.init)
-        //try M_Genre(json: json)
+        let plot        = try M_Movie.parsePlot(json: json)
         let details     = try M_ExtraDetails(json: json)
         
 
@@ -168,7 +188,8 @@ extension M_Movie{
                   year:    year,
                   rated:   rated,
                   genre:   genre,
-                  details: details)
+                  details: details,
+                  plot:    plot)
     }
 }
 
@@ -273,13 +294,7 @@ extension M_Rating{
 
 
 
-////////////////////////////
-// Using Custom Datatypes //
-////////////////////////////
-func displayMovie(movie: M_Movie){
-    print(movie.title)
-    print(movie.year)
-}
+
 
 
 
@@ -329,7 +344,6 @@ struct APIFetcher {
     static func fetchMovie(title: String, with completion: @escaping (M_Movie) -> ()){
         // TODO Account for spaces in the title, and fill with `+`
         let url = "http://www.omdbapi.com/?t=\(title)"
-        print(url)
         fetch(from: url) { json in
             let movie = json
             
@@ -342,8 +356,27 @@ struct APIFetcher {
 
 
 
-APIFetcher.fetchMovie(title: "shooter", with: displayMovie)
+extension M_Movie: CustomStringConvertible{
+    var description: String{
+        
+        return "Movie Information : \n" +
+        "   Title    : \(self.title           ) \n" +
+        "   Year     : \(self.year            ) \n" +
+        "   Rated    : \(self.rated           ) \n" +
+        "   Runtime  : \(self.details.runtime ) mins \n" +
+        "   Actors   : \(self.details.actors  ) \n" +
+        "   Writer   : \(self.details.writer  ) \n" +
+        "   Plot     : \(self.plot            ) \n" +
+        "\n"
+    }
+}
 
+
+
+APIFetcher.fetchMovie(title: "black hawk down"     ) { print($0) }
+APIFetcher.fetchMovie(title: "Shooter"             ) { print($0) }
+APIFetcher.fetchMovie(title: "Saving  private Ryan") { print($0) }
+APIFetcher.fetchMovie(title: "enemy at the gates"  ) { print($0) }
 
 
 
