@@ -18,13 +18,14 @@ JavaScript Object Notation (JSON), is a human readable format for structuring da
 ### Example Project Introduction
 Now that you have a basic understnaging of what JSON is, and why you need know about it, we can begin with our example project. As I mentioned earlier, we will be making a simple program that goes through the stages calling an API and retreving JSON, error chcking, and parsing the JSON into our custom datatypes. For consistency, all classes relating to a movie are prefixed with `M_`
 The datatypes are as follows:
-The `M_Genre` enumeration describes the different genres of movie.
+
+The `M_Genre` enumeration describes the different genres of movie. The enumerations have a raw value of type `String` so that the string that is returned as the **value** can be cast to a `M_Genre`. In the code extract 
 ``` swift
 enum M_Genre: String {
-    case action   = "Action"
-    case crime    = "Crime"
-    case thriller = "Thriller"
-    case drama    = "Drama"
+    case action      = "Action"
+    case crime       = "Crime"
+    ...
+    case mystery     = "Mystery"
 }
 ```
 The `M_Rating` structure is used to store the different ratings that a particular movie has recieved. The source of the review (eg. Rotten Tomatoes) is stored in `source`, and the score that it recieved is contained in `value`.
@@ -62,14 +63,90 @@ struct M_Movie {
 ```
 
 Now that we have all of the structures that we will be using defined, we can begin the main stages of this project.
+
 ### Making the API Call
 
-### Preparing for Errors
+``` swift 
+struct APIFetcher {
+    private static func fetch(from url: String, with completion: @escaping ([String: Any]) -> ()) {
+        let stringUrl = url.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed)
+        let myUrl = URL(string: stringUrl!)
+        var request = URLRequest(url: myUrl!)
+        request.httpMethod = "GET"
+        // Excute HTTP Request
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if error != nil {
+                print("error=\(error)")
+                return
+            }
+            DispatchQueue.main.async {
+                do {
+                    if let dict = try JSONSerialization.jsonObject(with: data!, options: []) as? [String: Any] {
+                        completion(dict)
+                    }
+                } catch let error as NSError {
+                    print("JSON Error : \(error.localizedDescription)")
+                }
+            }
+        }
+        task.resume()
+    }
+    
+    static func fetchMovie(title: String, with completion: @escaping (M_Movie) -> ()){
+        // TODO Account for spaces in the title, and fill with `+`
+        let url = "http://www.omdbapi.com/?t=\(title)"
+        fetch(from: url) { json in
+            let movie = json
+            let parsedMovie = try! M_Movie(json: movie)
+            completion(parsedMovie)
+        }
+    }
+}
+```
 
+
+### Preparing for Errors
+Whenever using external, and paritcularly online services, such as APIs, error handeling is imoportant. Defineing enumeratuons that mconform the `Error` protocol is useful for this reason, and  will be used by the parsers to `throw` an error. Below is an example of the error enumerations for the `M_ExtraDetail` structure, as you can see there is an error defined for each of the properites, which will need to be replacated for all of the previously defined structures.
+``` swift
+enum ExtraDetailJSONParseError: Error {
+    case missingRuntime
+    case missingWriter
+    case missingAgeRating
+    case missingActors
+    case missingPosterURL
+}
+```
 ### Parsing in a Bottom-up Mannor 
-- Genre
-- ExtraInfo
-- Movie
+
+Having declared our types, defined the errors that will be thrown, and have an overall good idea of the structure of our project, it is time to extend our `M_...` structures with their parsers.
+Take note that, for instance, a `M_Movie` contains a `M_Genre` as one of its **values**. Based on this, intuitavly it would make sense to define the parser for the `M_Genre` prior doing the one for `M_Movie`. 
+
+For example, below is the extension of the `M_ExtraDetails` structure that handels parseing the structures properties. When the desired property is of type `String` then the coversion is straight forward. 
+```swift
+extension M_ExtraDetails{
+    private static func parseWriter(json: [String: Any]) throws -> String {
+        guard let writer = json["Writer"] as? String else {
+            throw ExtraDetailJSONParseError.missingWriter
+        }
+        return writer
+    }
+    
+    ...
+    
+    private static func parsePosterURL(json: [String: Any]) throws -> String {
+        guard let posterURL = json["Poster"] as? String else {
+            throw ExtraDetailJSONParseError.missingPosterURL
+        }
+        return posterURL
+    }
+    
+    private static func parseRuntime(json: [String: Any]) throws -> Int {
+    guard let runtime = json["Runtime"] as? String else {
+        throw ExtraDetailJSONParseError.missingRuntime
+    }
+    return Int(runtime.components(separatedBy: " ")[0])!
+}
+```
 
 ### Presentation and Use
 - CustomStringConvertable
