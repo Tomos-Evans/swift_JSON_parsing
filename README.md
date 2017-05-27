@@ -182,8 +182,8 @@ All that is left to do now is run our code! Simply enter:
 and the following output should be attained:
 ``` sh
 Movie Information : 
-   Title		: Black Hawk Down 
-   Year		    : 2001 
+   Title        : Black Hawk Down 
+   Year         : 2001 
    Rated        : R 
    Runtime      : 144 mins 
    Actors       : Josh Hartnett, Ewan McGregor, Tom Sizemore, Eric Bana 
